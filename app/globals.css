@@ -1,0 +1,110 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import "highlight.js/styles/github-dark.css";
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: hsl(240 10% 3.9%);
+  color: hsl(0 0% 98%);
+  font-feature-settings: "rlig" 1, "calt" 1;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(240 3.7% 20%);
+  border-radius: 5px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(240 3.7% 30%);
+}
+
+/* Anchor offset for sticky header (none here, but useful) */
+:target {
+  scroll-margin-top: 2rem;
+}
+
+/* Override prose so it works nicely on dark bg */
+.prose pre {
+  background-color: hsl(240 6% 8%) !important;
+  border: 1px solid hsl(240 3.7% 15.9%);
+}
+
+.prose code {
+  background-color: hsl(240 3.7% 15.9%);
+  padding: 0.15em 0.35em;
+  border-radius: 4px;
+  font-size: 0.875em;
+  font-weight: 500;
+}
+
+.prose pre code {
+  background-color: transparent;
+  padding: 0;
+  border-radius: 0;
+  font-weight: 400;
+}
+
+.prose table {
+  font-size: 0.875em;
+}
+
+.prose th {
+  background-color: hsl(240 6% 9%);
+  font-weight: 600;
+}
+
+.prose th, .prose td {
+  border-color: hsl(240 3.7% 15.9%) !important;
+  padding: 0.5rem 0.75rem !important;
+}
+
+.prose blockquote {
+  border-left-color: hsl(48 100% 50%) !important;
+  background-color: hsl(240 6% 8%);
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  font-style: normal !important;
+}
+
+.prose blockquote p {
+  font-weight: 400;
+  color: hsl(0 0% 80%);
+}
+
+.prose a {
+  color: hsl(48 100% 60%);
+  text-decoration: none;
+}
+.prose a:hover {
+  text-decoration: underline;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4 {
+  scroll-margin-top: 4rem;
+}
+
+.prose h2 {
+  border-bottom: 1px solid hsl(240 3.7% 15.9%);
+  padding-bottom: 0.4em;
+  margin-top: 2.5em;
+}
+
+.prose h1 + p, .prose h2 + p {
+  margin-top: 0.5em;
+}
+
+.prose hr {
+  border-color: hsl(240 3.7% 15.9%);
+}
