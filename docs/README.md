@@ -8,7 +8,7 @@ controllers, routes, button mappings, and the APEX configuration.
 
 ```bash
 # Laravel + React
-cd Team16Project/TeamProject
+cd TeamProject
 composer install
 npm install
 cp .env.example .env

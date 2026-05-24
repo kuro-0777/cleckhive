@@ -18,11 +18,6 @@ ESP32 (PIR on GPIO13)
 sits in Laravel's file cache (`storage/framework/cache/`) and is
 overwritten on every POST. Reset = delete the cache key, no schema drift.
 
-The full drop-in bundle lives at
-`Downloads/aashika/TeamProject/TeamProjectFix/iot/` and ships as
-copy-in files + small "snippet" patches to existing files (so it doesn't
-trample your real `routes/api.php`, `config/services.php`, etc.).
-
 ---
 
 ## Files

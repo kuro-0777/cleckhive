@@ -4,9 +4,9 @@ import { Sidebar } from "@/components/sidebar";
 import { getAllDocs } from "@/lib/docs";
 
 export const metadata: Metadata = {
-  title: "Cleck Hudders Grocers — Documentation",
+  title: "CleckHive — Documentation",
   description:
-    "Beginner-friendly docs for the Cleck Hudders Grocers Laravel + Oracle + APEX project.",
+    "Beginner-friendly docs for the CleckHive Laravel + Oracle + APEX project.",
 };
 
 export default function RootLayout({
