@@ -33,6 +33,7 @@ const MAIN_TITLES: Record<string, string> = {
   "10-iot-firmware": "10 — Direct ORDS Calls from React",
   "12-iot-connectivity": "12 — IoT Connectivity (ESP32 + Motion)",
   "13-viva-walkthrough": "13 — Viva / Examiner Walkthrough",
+  "14-viva-part2": "14 — Viva Part 2 — Questions & Answers",
 };
 
 /** Oracle APEX backend — lives under /apex/<slug> routes. */

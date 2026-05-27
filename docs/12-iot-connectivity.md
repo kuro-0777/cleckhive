@@ -1,11 +1,14 @@
 # 12 — IoT Connectivity (ESP32 + Motion)
 
-Live "Collection Point is Busy / Moderate / Open" room-monitor.
+Live "Collection Point is Busy / Moderate / Open" room-monitor served at
+`/room-monitor`. Powered by an ESP32 with a PIR motion sensor that posts
+JSON over WiFi to the Laravel API once a second; React polls the same API
+once a second and re-renders the status card.
 
 ```
 ESP32 (PIR on GPIO13)
    │
-   ├── WiFi → POST /api/motion        (every 1s)
+   ├── WiFi → POST <NGROK_URL>/api/motion        (every 1s)
    │              │
    │       MotionController::store()
    │              │
@@ -15,32 +18,35 @@ ESP32 (PIR on GPIO13)
 ```
 
 **No model, no migration, no DB table.** The latest reading per device
-sits in Laravel's file cache (`storage/framework/cache/`) and is
+lives in Laravel's file cache (`storage/framework/cache/`) and is
 overwritten on every POST. Reset = delete the cache key, no schema drift.
 
 ---
 
-## Files
+## Why the ESP32 talks to an ngrok URL
 
-### Drop-in (copy verbatim into your Laravel tree)
+The ESP32 lives on whatever WiFi network is around (campus, home,
+hotspot). To reach the Laravel server it needs a stable, publicly
+addressable URL. We can't bake `http://192.168.x.y:8000` into the
+firmware because:
 
-| Source                                                         | → Destination                                            |
-|----------------------------------------------------------------|----------------------------------------------------------|
-| `iot/app/Http/Controllers/MotionController.php`                | `app/Http/Controllers/MotionController.php`              |
-| `iot/resources/js/pages/RoomMonitor.jsx`                       | `resources/js/pages/RoomMonitor.jsx`                     |
-| `iot/resources/js/pages/RoomMonitor.scss`                      | `resources/js/pages/RoomMonitor.scss`                    |
-| `iot/arduino/room-monitor.ino`                                 | open in Arduino IDE (not part of the Laravel tree)       |
+- The PC's LAN IP is **DHCP-assigned and rotates** every time the lease
+  expires or the laptop reconnects to a different network. Last week it
+  was `192.168.1.42`, today it's `10.0.0.118`, tomorrow it'll be
+  something else.
+- Many networks (campus WiFi especially) **block client-to-client
+  traffic**, so even if the IP were stable, the ESP32 couldn't reach it.
+- Re-flashing the ESP32 every time the IP changes is not a workflow.
 
-### Snippets (merge — do NOT replace whole files)
+So we tunnel: run `ngrok http 8000` against the local Laravel server and
+get back a fixed-for-the-session URL like
+`https://anthill-radar-ambiguous.ngrok-free.dev`. That's what's baked into both the
+ESP32 sketch and the React fetch base. The day's URL gets pasted into
+`.env`'s `APP_URL` and the Arduino `API_URL` constant, and everything
+keeps working regardless of which network the laptop is on.
 
-| Snippet                                          | Merge into                          | Why                                              |
-|--------------------------------------------------|-------------------------------------|--------------------------------------------------|
-| `iot/routes/api.snippet.php`                     | `routes/api.php`                    | adds POST `/motion` + GET `/motion/latest`       |
-| `iot/config/services.snippet.php`                | `config/services.php`               | adds `esp32.api_key` resolver                    |
-| `iot/.env.snippet`                               | `.env`                              | adds `ESP32_API_KEY`                             |
-| `iot/app/Providers/AppServiceProvider.snippet.php`| `app/Providers/AppServiceProvider.php` | forces HTTPS behind ngrok                     |
-| `iot/resources/js/app.snippet.jsx`               | `resources/js/app.jsx`              | adds the `/room-monitor` React route             |
-| `iot/vite.config.snippet.js` *(optional)*        | `vite.config.js`                    | LAN host + `/api` + `/storage` proxy for dev     |
+Bonus: ngrok gives us **HTTPS for free**, which means the ESP32 talks to
+the server over TLS without us having to provision a cert.
 
 ---
 
@@ -49,8 +55,8 @@ overwritten on every POST. Reset = delete the cache key, no schema drift.
 `.env`:
 
 ```env
-ESP32_API_KEY=your-secret-key
-# CACHE_STORE=file   # (only if you don't have create_cache_table migrated)
+APP_URL=https://anthill-radar-ambiguous.ngrok-free.dev     # today's tunnel URL
+ESP32_API_KEY=aashikachan
 ```
 
 `config/services.php`:
@@ -61,9 +67,9 @@ ESP32_API_KEY=your-secret-key
 ],
 ```
 
-The **same string** must go in the Arduino sketch:
+The **same key** is hard-coded in the ESP32 sketch:
 ```cpp
-const char* API_KEY = "your-secret-key";   // MUST match .env ESP32_API_KEY
+const char* API_KEY = "aashikachan";   // matches .env ESP32_API_KEY
 ```
 
 ---
@@ -134,7 +140,7 @@ class MotionController extends Controller
 }
 ```
 
-**Key shape — `motion:<device_id>`** (overwritten every second). `latest()` adds three computed fields on read: `last_seen_s`, `online` (true if ≤5s), and a `HH:MM:SS`-formatted `uptime`.
+**Key shape — `motion:<device_id>`** (overwritten every second). `latest()` adds three computed fields on read: `last_seen_s`, `online` (true if ≤5 s), and a `HH:MM:SS`-formatted `uptime`.
 
 ---
 
@@ -157,7 +163,7 @@ States it renders:
 3. **Sensor offline** — banner over the card when `data.online === false` (last update was >5 s ago).
 4. **Live** — emoji + label + advice + a `LIVE` / `OFFLINE` badge with a pulsing dot.
 
-Hook the page into your router by merging `iot/resources/js/app.snippet.jsx`:
+Wired into the router:
 
 ```jsx
 import RoomMonitor from './pages/RoomMonitor'
@@ -165,7 +171,7 @@ import RoomMonitor from './pages/RoomMonitor'
 <Route path="/room-monitor" element={<RoomMonitor />} />
 ```
 
-No layout / auth wrapping — anyone can view it.
+No layout / auth wrapping — anyone on the open URL can view it.
 
 ---
 
@@ -175,15 +181,18 @@ No layout / auth wrapping — anyone can view it.
 - Library: **ArduinoJson** (Benoit Blanchon) via Library Manager
 - Wiring: PIR `VCC → VIN (5V)`, `GND → GND`, `OUT → GPIO 13`
 
-Four constants to edit before flashing:
+Four constants edited before flashing:
 
 ```cpp
 const char* WIFI_SSID     = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
-const char* API_URL       = "http://192.168.1.42:8000/api/motion";   // your PC's LAN IP
-const char* API_KEY       = "your-secret-key";                       // matches .env
+const char* API_URL       = "https://anthill-radar-ambiguous.ngrok-free.dev/api/motion";  // ngrok tunnel
+const char* API_KEY       = "aashikachan";                                  // matches .env
 const char* DEVICE_ID     = "room-101";
 ```
+
+`API_URL` is the ngrok URL because the PC's LAN IP would otherwise need
+re-flashing on every network change — see the reasoning at the top.
 
 ### Busyness classification
 
@@ -218,7 +227,7 @@ Sent with headers:
 ```
 Content-Type: application/json
 Accept:       application/json
-X-Api-Key:    your-secret-key
+X-Api-Key:    aashikachan
 ```
 
 If WiFi drops, `postJson()` calls `connectWiFi()` and skips the POST that
@@ -226,28 +235,26 @@ tick.
 
 ---
 
-## Apply the bundle
+## Day-to-day startup
 
 ```cmd
-cd path\to\TeamProjectFix\iot
-copy app\Http\Controllers\MotionController.php  ..\..\app\Http\Controllers\
-copy resources\js\pages\RoomMonitor.jsx          ..\..\resources\js\pages\
-copy resources\js\pages\RoomMonitor.scss         ..\..\resources\js\pages\
-
-:: then merge each *.snippet.* into the corresponding real file
-
-php artisan config:clear
-php artisan route:clear
-php artisan route:list          :: confirm api/motion + api/motion/latest are listed
-
-npm run build                   :: or `npm run dev` if not behind ngrok
+:: 1. Start Laravel bound to all interfaces
 php artisan serve --host=0.0.0.0 --port=8000
+
+:: 2. Tunnel it
+ngrok http 8000
+:: → copy the https://....ngrok-free.app URL it prints
+
+:: 3. Put that URL into .env's APP_URL  (and into the Arduino sketch's API_URL
+::    if it changed since last flash — paid ngrok plans give a reserved domain
+::    that stays the same, so re-flashing isn't usually needed mid-session)
+
+:: 4. Hot reload
+php artisan config:clear
 ```
 
-Visit:
-- Local: `http://localhost:5173/room-monitor` (dev) or `http://localhost:8000/room-monitor` (built)
-- LAN: `http://YOUR_PC_LAN_IP:8000/room-monitor`
-- Tunnelled: open the ngrok URL + `/room-monitor`
+Then visit `<ngrok URL>/room-monitor` from any browser — phone, laptop,
+projector — and the live status renders.
 
 ---
 
@@ -255,13 +262,13 @@ Visit:
 
 | Symptom                                            | Likely cause                                                | Fix                                                          |
 |----------------------------------------------------|-------------------------------------------------------------|--------------------------------------------------------------|
-| ESP32 serial: `POST failed: connection refused`    | `artisan serve` bound to 127.0.0.1                          | Restart with `--host=0.0.0.0`                                |
-| Same, but on campus/public WiFi                    | AP/client isolation blocks LAN-to-LAN                       | Phone hotspot OR ngrok tunnel                                |
-| Browser console: `Mixed Content`                   | HTTPS page loading HTTP assets                              | `npm run build` instead of `npm run dev`, or merge `AppServiceProvider.snippet.php` |
-| Browser DevTools: CORS error                       | Vite on `:5173` calling Laravel on `:8000`                  | Use `vite.config.snippet.js` proxy, or build the frontend    |
+| ESP32 serial: `POST failed: connection refused`    | Laravel not running or bound to 127.0.0.1 only              | Restart with `--host=0.0.0.0`; confirm ngrok session is live |
+| ESP32 serial: `-1` errors against the ngrok URL    | ngrok session expired (free tier rotates URLs)              | Re-run `ngrok http 8000`, update `API_URL`, re-flash         |
+| Browser console: `Mixed Content`                   | HTTPS page loading HTTP assets                              | `npm run build` instead of `npm run dev`; HTTPS is forced on `x-forwarded-proto=https` |
+| Browser DevTools: CORS error                       | Vite on `:5173` calling Laravel on `:8000`                  | Use the Vite proxy in `vite.config.js`, or serve the built bundle through Laravel |
 | Page stuck on "Waiting for device…"                | ESP32 not posting, OR key mismatch (401), OR cache cleared  | Check ESP32 Serial Monitor for `POST 200`; verify `ESP32_API_KEY` |
 | ESP32 serial: `401 Unauthorized`                   | `X-Api-Key` header ≠ `.env`                                 | Update either side to match                                  |
-| ESP32 serial: `POST 422`                           | Validation failed                                           | Make sure `device_id`/`status`/`motion_count`/`uptime_ms` are present and types match |
+| ESP32 serial: `POST 422`                           | Validation failed                                           | Confirm `device_id`/`status`/`motion_count`/`uptime_ms` all present and typed correctly |
 
 ---
 
@@ -274,6 +281,6 @@ device into the same WAL the rest of CleckHive uses, and (c) immediately
 discarding ~99% of those rows.
 
 The file cache wins: zero schema, zero migration, atomically overwritten,
-and `Cache::get()` is a single `file_get_contents`. If you ever need
-historical data, layer a `motion_history` table on top — but don't make
-that the source of truth for the live screen.
+and `Cache::get()` is a single `file_get_contents`. If historical data
+ever becomes useful, a `motion_history` table can layer on top — but it
+shouldn't be the source of truth for the live screen.
